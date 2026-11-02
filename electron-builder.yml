@@ -11,7 +11,7 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: icons/newicon.ico
+  icon: icons/Newicon.ico
   signAndEditExecutable: false
   artifactName: "${productName}-Setup-${version}.${ext}"
   # Ship only the Windows x64 koffi binary (see the koffi note under asarUnpack).

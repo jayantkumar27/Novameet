@@ -256,6 +256,10 @@ function createMainWindow() {
     show: false,
   });
 
+  if (process.platform === 'win32') {
+    mainWindow.setIcon(nativeImage.createFromPath(getAppIconPath()));
+  }
+
   const rendererUrl = isDev
     ? 'http://localhost:5173'
     : `file://${path.join(__dirname, '../dist/renderer/index.html')}`;
@@ -363,7 +367,7 @@ function resolveIconPath(...candidates) {
 function getAppIconPath() {
   // Prefer .ico on Windows for taskbar / window chrome; fall back to PNG.
   return resolveIconPath(
-    path.join(__dirname, '../assets/icons/newicon.ico'),
+    path.join(__dirname, '../assets/icons/Newicon.ico'),
     path.join(__dirname, '../assets/icons/newicon.png'),
     path.join(__dirname, '../assets/icons/icon.ico'),
     path.join(__dirname, '../assets/icons/icon256.png'),
