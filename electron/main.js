@@ -363,6 +363,8 @@ function resolveIconPath(...candidates) {
 function getAppIconPath() {
   // Prefer .ico on Windows for taskbar / window chrome; fall back to PNG.
   return resolveIconPath(
+    path.join(__dirname, '../assets/icons/newicon.ico'),
+    path.join(__dirname, '../assets/icons/newicon.png'),
     path.join(__dirname, '../assets/icons/icon.ico'),
     path.join(__dirname, '../assets/icons/icon256.png'),
     path.join(__dirname, '../assets/icons/icon128.png'),

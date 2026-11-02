@@ -11,7 +11,7 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: icons/icon.ico
+  icon: icons/newicon.ico
   signAndEditExecutable: false
   artifactName: "${productName}-Setup-${version}.${ext}"
   # Ship only the Windows x64 koffi binary (see the koffi note under asarUnpack).
@@ -69,9 +69,9 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   artifactName: "${productName}-Setup-${version}.${ext}"
-  installerIcon: icons/icon.ico
-  uninstallerIcon: icons/icon.ico
-  installerHeaderIcon: icons/icon.ico
+  installerIcon: icons/newicon.ico
+  uninstallerIcon: icons/newicon.ico
+  installerHeaderIcon: icons/newicon.ico
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: MeetScribe
