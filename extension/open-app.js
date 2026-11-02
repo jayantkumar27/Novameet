@@ -1,6 +1,6 @@
 'use strict';
 
-const PROTOCOL_URL = 'novameet://open';
+const PROTOCOL_URL = 'meetscribe://open';
 const statusEl = document.getElementById('status');
 const hintEl = document.getElementById('hint');
 const launchEl = document.getElementById('launch');
@@ -14,13 +14,13 @@ function openProtocol() {
 }
 
 launchEl.addEventListener('click', () => {
-  statusEl.textContent = 'Launching NovaMeet…';
+  statusEl.textContent = 'Launching MeetScribe…';
 });
 
 openProtocol();
 
 setTimeout(() => {
-  statusEl.textContent = 'Waiting for NovaMeet…';
+  statusEl.textContent = 'Waiting for MeetScribe…';
   hintEl.hidden = false;
 }, 800);
 

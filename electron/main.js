@@ -10,6 +10,9 @@ const path = require('path');
 const fs = require('fs');
 const { Readable } = require('stream');
 
+// Keep existing user profiles in the same location after changing the visible product name.
+app.setPath('userData', path.join(app.getPath('appData'), 'NovaMeet'));
+
 const { getConfig, setConfig, setMultipleConfig } = require('./utils/config');
 const logger = require('./utils/logger');
 const { startWebSocketServer, stopWebSocketServer, broadcastToExtension } = require('./websocket-server');
@@ -35,7 +38,7 @@ const isMac = process.platform === 'darwin';
 // ── Auto-launch helpers ──────────────────────────────────────────────────────
 // On Windows + NSIS, Electron writes to HKCU\…\Run. The registry key name is
 // derived from `name` (defaults to `app.name`, which is "Electron" in dev and
-// "novameet" in production). Passing an explicit `name` keeps the key stable
+// "meetscribe" in production). Passing an explicit `name` keeps the key stable
 // across dev / prod.  We also skip the call entirely in dev mode so `pnpm run
 // dev` never writes a broken startup entry pointing at the dev electron binary.
 
@@ -131,31 +134,33 @@ if (!gotSingleInstanceLock) {
 } else {
   app.on('second-instance', (_event, argv) => {
     focusMainWindow();
-    const protocolUrl = argv.find((arg) => typeof arg === 'string' && arg.startsWith('novameet://'));
+    const protocolUrl = argv.find((arg) => typeof arg === 'string' &&
+      (arg.startsWith('meetscribe://') || arg.startsWith('novameet://')));
     if (protocolUrl) logger.info('Opened via protocol', { protocolUrl });
   });
 }
 
-// macOS delivers novameet:// links through open-url, not argv. Registered before `ready` so the
+// macOS delivers custom-protocol links through open-url, not argv. Registered before `ready` so the
 // link that launched the app isn't lost; at launch the window opens anyway, so it only needs
 // focusing once the app is up.
 app.on('open-url', (event, url) => {
   event.preventDefault();
-  if (!url.startsWith('novameet://')) return;
+  if (!url.startsWith('meetscribe://') && !url.startsWith('novameet://')) return;
   logger.info('Opened via protocol', { protocolUrl: url });
   if (app.isReady()) focusMainWindow();
 });
 
-// Only the packaged app should own novameet://.
+// Only the packaged app should own the product protocols.
 // Registering from `pnpm run dev` steals the handler and points it at electron.exe,
 // so "Open App" from the extension fails after install.
 if (app.isPackaged) {
+  app.setAsDefaultProtocolClient('meetscribe');
   app.setAsDefaultProtocolClient('novameet');
 }
 
-// Must be called before app.whenReady() to allow media playback from novameet-audio://
-protocol.registerSchemesAsPrivileged([{
-  scheme: 'novameet-audio',
+// Register both schemes so existing saved audio links keep working after the rename.
+protocol.registerSchemesAsPrivileged(['meetscribe-audio', 'novameet-audio'].map((scheme) => ({
+  scheme,
   privileges: {
     standard: true,
     secure: true,
@@ -163,7 +168,7 @@ protocol.registerSchemesAsPrivileged([{
     stream: true,
     bypassCSP: true,
   },
-}]);
+})));
 
 let mainWindow = null;
 let tray = null;
@@ -246,7 +251,7 @@ function createMainWindow() {
       nodeIntegration: false,
       sandbox: false,
       backgroundThrottling: false,
-      additionalArguments: [`--novameet-theme=${savedTheme}`],
+      additionalArguments: [`--meetscribe-theme=${savedTheme}`],
     },
     show: false,
   });
@@ -256,7 +261,7 @@ function createMainWindow() {
     : `file://${path.join(__dirname, '../dist/renderer/index.html')}`;
 
   mainWindow.loadURL(rendererUrl);
-  mainWindow.setTitle('NovaMeet');
+  mainWindow.setTitle('MeetScribe');
   mainWindow.on('page-title-updated', (e) => e.preventDefault());
 
   // Show quickly — don't wait forever for full renderer paint.
@@ -433,7 +438,7 @@ function createAppMenu() {
 function createTray() {
   const icon = getTrayIcon();
   tray = new Tray(icon);
-  tray.setToolTip('NovaMeet');
+  tray.setToolTip('MeetScribe');
   updateTrayMenu();
 
   tray.on('click', () => {
@@ -451,7 +456,7 @@ function updateTrayMenu() {
 
   const menuItems = [
     {
-      label: 'Open NovaMeet',
+      label: 'Open MeetScribe',
       click: () => { focusMainWindow(); },
     },
     { type: 'separator' },
@@ -627,7 +632,7 @@ async function handleStartRecording(sessionId, meetingUrl, meetingTitle) {
     // The FFmpeg fallback records through Windows devices (WASAPI loopback / DirectShow) only.
     if (isMac) {
       throw new Error(
-        'Could not start recording. Check that NovaMeet may use the microphone and Screen & System Audio Recording ' +
+        'Could not start recording. Check that MeetScribe may use the microphone and Screen & System Audio Recording ' +
         '(System Settings → Privacy & Security), then try again.'
       );
     }
@@ -1727,7 +1732,7 @@ if (process.platform === 'win32') {
 }
 
 app.whenReady().then(async () => {
-  logger.info('NovaMeet starting up');
+  logger.info('MeetScribe starting up');
 
   // Show UI as early as possible — defer heavy recovery work.
   await db.initialize();
@@ -1735,21 +1740,21 @@ app.whenReady().then(async () => {
   registerIpcHandlers();
 
   // Serve session audio for renderer playback:
-  // novameet-audio://session/<sessionId>  (preferred)
-  // novameet-audio://<sessionId>          (legacy)
-  protocol.handle('novameet-audio', (request) => {
+  // meetscribe-audio://session/<sessionId>  (preferred)
+  // meetscribe-audio://<sessionId>          (legacy)
+  const handleAudioRequest = (request) => {
     try {
       const parsed = new URL(request.url);
       const pathId = decodeURIComponent(parsed.pathname.replace(/^\/+/, '').split('/')[0] || '');
       const sessionId = pathId || parsed.hostname || '';
       if (!sessionId || sessionId === 'session') {
-        logger.warn('novameet-audio request missing session id', { url: request.url });
+        logger.warn('meetscribe-audio request missing session id', { url: request.url });
         return new Response(null, { status: 400 });
       }
 
       const audioPath = resolveSessionAudioPath(sessionId);
       if (!audioPath) {
-        logger.warn('novameet-audio file not found', { sessionId });
+        logger.warn('meetscribe-audio file not found', { sessionId });
         return new Response(null, { status: 404 });
       }
 
@@ -1767,7 +1772,7 @@ app.whenReady().then(async () => {
       const { size } = fs.statSync(audioPath);
       const rangeHeader = request.headers.get('Range');
 
-      logger.info('novameet-audio streaming file', { sessionId, audioPath, mime, range: rangeHeader || 'none' });
+      logger.info('meetscribe-audio streaming file', { sessionId, audioPath, mime, range: rangeHeader || 'none' });
 
       if (rangeHeader) {
         const match = /bytes=(\d*)-(\d*)/.exec(rangeHeader);
@@ -1805,10 +1810,12 @@ app.whenReady().then(async () => {
         },
       });
     } catch (err) {
-      logger.error('novameet-audio protocol error', err);
+      logger.error('Audio protocol error', err);
       return new Response(null, { status: 500 });
     }
-  });
+  };
+  protocol.handle('meetscribe-audio', handleAudioRequest);
+  protocol.handle('novameet-audio', handleAudioRequest);
 
   createAppMenu();
   // Packaged mac apps get their Dock icon from the bundle's .icns; in dev it's Electron's.
@@ -1823,14 +1830,14 @@ app.whenReady().then(async () => {
     },
   });
 
-  // Keep novameet:// pointed at this installed exe (not a leftover dev registration).
+  // Keep meetscribe:// pointed at this installed exe (not a leftover dev registration).
   if (app.isPackaged) {
-    app.setAsDefaultProtocolClient('novameet');
+    app.setAsDefaultProtocolClient('meetscribe');
   }
 
-  // Windows cold-start via novameet:// puts the URL on process.argv
+  // Windows cold-start via meetscribe:// puts the URL on process.argv
   const startupProtocolUrl = process.argv.find(
-    (arg) => typeof arg === 'string' && arg.startsWith('novameet://'),
+    (arg) => typeof arg === 'string' && arg.startsWith('meetscribe://'),
   );
   if (startupProtocolUrl) {
     logger.info('Started via protocol', { startupProtocolUrl });
@@ -1876,7 +1883,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Don't quit: NovaMeet keeps running in the tray (Windows) or menu bar (macOS). Closing the
+  // Don't quit: MeetScribe keeps running in the tray (Windows) or menu bar (macOS). Closing the
   // window only hides it (see the 'close' handler); Quit is in the tray menu, or ⌘Q on macOS.
 });
 
@@ -1886,7 +1893,7 @@ app.on('before-quit', () => {
   stopEventPoller();
   meetingDetector.stop();
   destroyOverlay();
-  logger.info('NovaMeet shutting down');
+  logger.info('MeetScribe shutting down');
 });
 
 // ── Calendar Event Poller ─────────────────────────────────────────────────────
